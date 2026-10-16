@@ -1,66 +1,71 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CI Pipeline para Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Objetivo
+Automatizar la instalación de dependencias y la ejecución de pruebas de la
+aplicación Laravel mediante GitHub Actions.
 
-## About Laravel
+## Tecnologías
+PHP 8.2, Laravel 11.57, Composer, PHPUnit, Git, GitHub y GitHub Actions.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Requisitos
+PHP 8.2 o superior, Composer, Git y acceso al repositorio de GitHub.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Instalación local
+1. `git clone https://github.com/Nina9897/Laravelnina.git`
+2. `composer install`
+3. Copiar `.env.example` a `.env`
+4. `php artisan key:generate`
+5. `php artisan migrate` (el proyecto usa SQLite)
+6. `php artisan test`
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Integración continua
+El workflow `.github/workflows/ci.yml` se ejecuta al enviar cambios a `main` o
+al crear un pull request hacia ella. Obtiene el código, configura PHP 8.2,
+valida Composer, instala dependencias, prepara el entorno y ejecuta
+`php artisan test` con SQLite en memoria. No despliega a producción.
 
-## Learning Laravel
+![Estructura y ci.yml](docs/03-estructura-ci.png)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Pruebas
+`tests/Feature/HomePageTest.php` verifica que la ruta `/` responda con éxito
+(HTTP 200). Junto con las 2 pruebas de ejemplo de Laravel, el proyecto tiene 3
+pruebas, que pasaron en local antes de configurar el CI.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+![Pruebas locales](docs/02-pruebas-locales.png)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Evidencias
 
-## Laravel Sponsors
+**1. Ejecución exitosa**
+Commit `276ca8b`, 16/10/2026, 3 pruebas pasadas en 20 s.
+[Ver ejecución](https://github.com/Nina9897/Laravelnina/actions/runs/38981060339)
+Todos los pasos terminaron en verde: el proyecto se comporta en GitHub igual
+que en local.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+![Exitosa](docs/04-actions-exitosa.png)
 
-### Premium Partners
+**2. Ejecución fallida (controlada)**
+Commit `<hash>`, `<fecha>`. [Ver ejecución](<URL>)
+Se cambió `assertSuccessful()` por `assertStatus(404)`. Error en el log:
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+```
+Expected response status code [404] but received 200.
+```
 
-## Contributing
+La prueba exigía 404, pero la ruta `/` responde 200. Los pasos previos pasaron;
+el pipeline falló solo en las pruebas. Solución: restaurar `assertSuccessful()`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+![Fallo local](docs/05-fallo-local.png)
+![Fallida](docs/06-actions-fallida.png)
 
-## Code of Conduct
+**3. Ejecución exitosa tras la corrección**
+Commit `<hash>`, `<fecha>`. [Ver ejecución](<URL>)
+Al restaurar la aserción, el mismo paso pasó las 3 pruebas y el pipeline volvió
+a aprobarse.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+![Corregida](docs/07-actions-corregida.png)
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Conclusiones
+El pipeline detectó automáticamente el error: falló en el paso de pruebas y el
+log indicó la causa y la línea exacta. Tras corregirlo y hacer un nuevo commit,
+volvió a aprobarse. La integración continua permite detectar errores de forma
+temprana y ejecutar las pruebas siempre en un entorno limpio y reproducible.
