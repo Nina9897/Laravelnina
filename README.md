@@ -68,4 +68,4 @@ a aprobarse.
 El pipeline detectó automáticamente el error: falló en el paso de pruebas y el
 log indicó la causa y la línea exacta. Tras corregirlo y hacer un nuevo commit,
 volvió a aprobarse. La integración continua permite detectar errores de forma
-temprana y ejecutar las pruebas siempre en un entorno limpio y reproducible.
+temprana y ejecutar las pruebas siempre en un entorno limpio y reproducible. 

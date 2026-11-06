@@ -1,0 +1,165 @@
+name: Laravel Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a generar (ej. v1.0.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: read
+
+env:
+  PHP_VERSION: '8.2'
+  PHP_EXTENSIONS: mbstring, pdo_sqlite, sqlite3, bcmath, fileinfo
+
+jobs:
+  pruebas:
+    name: 1. Pruebas (CI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+
+      - name: Validar Composer
+        run: composer validate
+
+      - name: Instalar dependencias
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Preparar entorno Laravel
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+
+      - name: Ejecutar pruebas automatizadas
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test
+
+  empaquetar:
+    name: 2. Generar artefacto de liberación
+    needs: pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+
+      - name: Determinar versión
+        id: version
+        env:
+          ENTRADA_MANUAL: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="$ENTRADA_MANUAL"
+          fi
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versión inválida '$VERSION'. Usa vMAYOR.MENOR.PARCHE (ej. v1.0.0)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Preparar archivos de liberación
+        run: bash scripts/preparar-release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Validar contenido del artefacto
+        run: |
+          set -o pipefail
+          bash scripts/validar-artefacto.sh "dist/laravel-release-${{ steps.version.outputs.version }}.tar.gz" \
+            | tee "dist/validacion-${{ steps.version.outputs.version }}.txt"
+
+      - name: Resumen de la ejecución
+        run: |
+          {
+            echo "## Artefacto generado"
+            echo "- Versión: \`${{ steps.version.outputs.version }}\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo '```'
+            cat dist/*.sha256
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-release-${{ steps.version.outputs.version }}
+          path: |
+            dist/laravel-release-*.tar.gz
+            dist/laravel-release-*.tar.gz.sha256
+            dist/validacion-*.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  preproduccion:
+    name: 3. Entrega a preproducción
+    needs: empaquetar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: preproduccion
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+
+      - name: Descargar artefacto
+        uses: actions/download-artifact@v4
+        with:
+          name: laravel-release-${{ needs.empaquetar.outputs.version }}
+          path: dist
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+
+      - name: Verificar integridad del artefacto
+        run: cd dist && sha256sum -c laravel-release-*.tar.gz.sha256
+
+      - name: Instalar en preproducción y probar
+        run: |
+          set -o pipefail
+          bash scripts/desplegar-preproduccion.sh \
+            "dist/laravel-release-${{ needs.empaquetar.outputs.version }}.tar.gz" \
+            "$RUNNER_TEMP/preprod" | tee dist/despliegue-preproduccion.txt
+
+      - name: Guardar evidencia del despliegue
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-preproduccion-${{ needs.empaquetar.outputs.version }}
+          path: dist/despliegue-preproduccion.txt
+          retention-days: 14
